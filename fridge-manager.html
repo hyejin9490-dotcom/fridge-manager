@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff">
+<title>냉장고 관리</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+:root {
+  --bg: #ffffff; --bg2: #f7f7f5; --bg3: #ebebea;
+  --text: #1a1a1a; --text2: #6b6b68; --text3: #9b9b98;
+  --border: #e4e4e0; --border2: #cfcfcb;
+  --radius: 10px; --radius-lg: 14px; --pill: 999px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1c1e; --bg2: #2c2c2e; --bg3: #3a3a3c;
+    --text: #f2f2f7; --text2: #aeaead; --text3: #6e6e6b;
+    --border: #38383a; --border2: #48484a;
+  }
+}
+
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; }
+
+#app { max-width: 600px; margin: 0 auto; height: 100vh; display: flex; flex-direction: column; }
+
+/* 헤더 */
+#hdr {
+  flex-shrink: 0; background: var(--bg); border-bottom: 1px solid var(--border);
+  padding: 14px 16px 12px; display: flex; align-items: center; justify-content: space-between;
+  position: relative; z-index: 10;
+}
+#hdr h1 { font-size: 18px; font-weight: 600; }
+.hdr-right { display: flex; align-items: center; gap: 8px; }
+#sync-status { font-size: 11px; color: var(--text3); }
+#sync-status.ok { color: #27500A; }
+#sync-status.err { color: #A32D2D; }
+#btn-add {
+  display: flex; align-items: center; gap: 5px;
+  padding: 8px 16px; border-radius: var(--pill); border: none;
+  background: var(--text); color: var(--bg); font-size: 14px; font-weight: 500; cursor: pointer;
+}
+#btn-add:active { opacity: .7; }
+#btn-add svg { pointer-events: none; }
+
+/* 스크롤 영역 */
+#scroll-area { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+/* 통계 */
+.stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; padding: 14px 16px; }
+.stat { background: var(--bg2); border-radius: var(--radius); padding: 10px 6px; text-align: center; }
+.stat-lbl { font-size: 11px; color: var(--text2); margin-bottom: 3px; line-height: 1.3; }
+.stat-val { font-size: 20px; font-weight: 600; }
+.c-warn { color: #BA7517; }
+.c-danger { color: #A32D2D; }
+
+/* 필터 */
+.filters { display: flex; gap: 7px; padding: 0 16px 12px; overflow-x: auto; scrollbar-width: none; }
+.filters::-webkit-scrollbar { display: none; }
+.fbtn { flex-shrink: 0; padding: 7px 14px; border-radius: var(--pill); border: 1px solid var(--border); background: var(--bg); color: var(--text2); font-size: 13px; cursor: pointer; white-space: nowrap; }
+.fbtn.on { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 500; }
+
+/* 범례 */
+.legend { display: flex; flex-wrap: wrap; gap: 8px 14px; padding: 0 16px 14px; font-size: 11px; color: var(--text2); align-items: center; }
+.leg { display: flex; align-items: center; gap: 4px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+/* 목록 */
+#list { padding: 0 16px 16px; }
+.grp-hdr { font-size: 12px; font-weight: 600; color: var(--text2); padding: 12px 0 6px; display: flex; align-items: center; gap: 6px; }
+.grp-hdr::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); margin-bottom: 8px; padding: 13px 14px; display: flex; align-items: center; gap: 10px; }
+.cl { flex: 1; min-width: 0; }
+.cname { font-size: 15px; font-weight: 500; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmeta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.badge { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: var(--pill); font-size: 11px; font-weight: 500; }
+.b-cold { background: #E6F1FB; color: #0C447C; }
+.b-freeze { background: #E1F5EE; color: #085041; }
+.b-room { background: #FAEEDA; color: #633806; }
+@media (prefers-color-scheme: dark) {
+  .b-cold { background: #0C447C; color: #B5D4F4; }
+  .b-freeze { background: #085041; color: #9FE1CB; }
+  .b-room { background: #4a2800; color: #FAC775; }
+}
+.qty { font-size: 12px; color: var(--text2); }
+.cr { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex-shrink: 0; }
+.dday { display: inline-block; padding: 3px 10px; border-radius: var(--pill); font-size: 12px; font-weight: 600; text-align: center; min-width: 58px; }
+.d-ok { background: #EAF3DE; color: #27500A; }
+.d-warn { background: #FAEEDA; color: #633806; }
+.d-danger { background: #FAECE7; color: #712B13; }
+.d-over { background: #FCEBEB; color: #791F1F; }
+.d-none { background: #F1EFE8; color: #5F5E5A; }
+@media (prefers-color-scheme: dark) {
+  .d-ok { background: #27500A; color: #C0DD97; }
+  .d-warn { background: #4a2800; color: #FAC775; }
+  .d-danger { background: #4a1800; color: #F5C4B3; }
+  .d-over { background: #4a0a0a; color: #F7C1C1; }
+  .d-none { background: #3a3a3a; color: #B4B2A9; }
+}
+.edate { font-size: 11px; color: var(--text3); }
+.acts { display: flex; gap: 4px; flex-shrink: 0; }
+.ibtn { width: 34px; height: 34px; border-radius: 8px; border: none; background: var(--bg2); color: var(--text2); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.ibtn:active { background: var(--bg3); }
+.ibtn svg { width: 15px; height: 15px; pointer-events: none; }
+.ibtn.del:active { background: #FCEBEB; color: #A32D2D; }
+.empty { text-align: center; padding: 60px 0; color: var(--text2); font-size: 14px; line-height: 2.2; }
+
+/* 로딩 */
+#loading { text-align: center; padding: 60px 0; color: var(--text2); font-size: 14px; }
+.spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--text2); border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 12px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 하단 고정 바 */
+#bottom-bar { flex-shrink: 0; display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--bg); position: relative; z-index: 10; }
+.sbtn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 11px 8px; border-radius: var(--radius); font-size: 13px; font-weight: 500; cursor: pointer; }
+.sbtn:active { opacity: .7; }
+.sbtn.exp { border: 1px solid #B5D4F4; background: #E6F1FB; color: #0C447C; }
+.sbtn.imp { border: 1px solid #9FE1CB; background: #E1F5EE; color: #085041; }
+@media (prefers-color-scheme: dark) {
+  .sbtn.exp { border-color: #0C447C; background: #042C53; color: #B5D4F4; }
+  .sbtn.imp { border-color: #085041; background: #04342C; color: #9FE1CB; }
+}
+.sbtn svg { width: 16px; height: 16px; pointer-events: none; }
+#file-input { display: none; }
+
+/* 토스트 */
+#toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(10px); background: rgba(0,0,0,.85); color: #fff; padding: 10px 18px; border-radius: var(--pill); font-size: 13px; opacity: 0; transition: all .25s; pointer-events: none; z-index: 9999; white-space: nowrap; max-width: 90vw; text-align: center; }
+#toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* 모달 */
+#overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 1000; align-items: flex-end; justify-content: center; }
+#overlay.on { display: flex; }
+#sheet { background: var(--bg); width: 100%; max-width: 600px; border-radius: 20px 20px 0 0; padding: 20px 20px 44px; max-height: 92vh; overflow-y: auto; position: relative; z-index: 1001; }
+.handle { width: 36px; height: 4px; border-radius: 2px; background: var(--border2); margin: 0 auto 18px; }
+#sheet h2 { font-size: 17px; font-weight: 600; margin-bottom: 20px; }
+.field { margin-bottom: 16px; }
+.field label { display: block; font-size: 12px; font-weight: 500; color: var(--text2); margin-bottom: 7px; }
+.field input[type=text], .field input[type=date] { width: 100%; padding: 12px 14px; border: 1px solid var(--border2); border-radius: var(--radius); background: var(--bg2); color: var(--text); font-size: 15px; -webkit-appearance: none; appearance: none; }
+.field input:focus { outline: 2px solid var(--text2); outline-offset: -1px; }
+.field input:disabled { opacity: .3; pointer-events: none; }
+.seg { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; }
+.seg-btn { padding: 11px 4px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg2); color: var(--text2); font-size: 14px; cursor: pointer; text-align: center; }
+.seg-btn.on { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 500; }
+.noexp { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.noexp input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--text); cursor: pointer; flex-shrink: 0; }
+.noexp label { font-size: 13px; color: var(--text2); cursor: pointer; }
+.mact { display: flex; gap: 8px; margin-top: 22px; }
+.btn-cancel { flex: 1; padding: 14px; border-radius: var(--radius); border: 1px solid var(--border2); background: var(--bg2); color: var(--text2); font-size: 15px; cursor: pointer; }
+.btn-save { flex: 2; padding: 14px; border-radius: var(--radius); border: none; background: var(--text); color: var(--bg); font-size: 15px; font-weight: 500; cursor: pointer; }
+.btn-save:active { opacity: .75; }
+
+/* 삭제 확인 */
+#cf { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 2000; align-items: center; justify-content: center; padding: 24px; }
+#cf.on { display: flex; }
+.cf-box { background: var(--bg); border-radius: var(--radius-lg); padding: 24px 20px 18px; width: 100%; max-width: 300px; text-align: center; }
+.cf-box p { font-size: 15px; margin-bottom: 18px; line-height: 1.6; }
+.cf-acts { display: flex; gap: 8px; }
+.cf-no { flex: 1; padding: 12px; border-radius: var(--radius); border: 1px solid var(--border2); background: var(--bg2); color: var(--text2); font-size: 14px; cursor: pointer; }
+.cf-yes { flex: 1; padding: 12px; border-radius: var(--radius); border: none; background: #E24B4A; color: #fff; font-size: 14px; font-weight: 500; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="hdr">
+    <h1>🧊 냉장고 관리</h1>
+    <div class="hdr-right">
+      <span id="sync-status">연결 중...</span>
+      <button id="btn-add">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        추가
+      </button>
+    </div>
+  </div>
+
+  <div id="scroll-area">
+    <div class="stats" id="stats"></div>
+    <div class="filters" id="filters">
+      <button class="fbtn on" data-f="all">전체</button>
+      <button class="fbtn" data-f="냉장">❄️ 냉장</button>
+      <button class="fbtn" data-f="냉동">🧊 냉동</button>
+      <button class="fbtn" data-f="실온">☀️ 실온</button>
+    </div>
+    <div class="legend">
+      <span>D-day:</span>
+      <span class="leg"><span class="dot" style="background:#639922"></span>여유 7일+</span>
+      <span class="leg"><span class="dot" style="background:#BA7517"></span>임박 3~6일</span>
+      <span class="leg"><span class="dot" style="background:#D85A30"></span>위험 1~2일</span>
+      <span class="leg"><span class="dot" style="background:#A32D2D"></span>만료</span>
+      <span class="leg"><span class="dot" style="background:#888780"></span>기한없음</span>
+    </div>
+    <div id="list">
+      <div id="loading"><div class="spinner"></div>데이터 불러오는 중...</div>
+    </div>
+  </div>
+
+  <div id="bottom-bar">
+    <button class="sbtn exp" id="btn-export">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      내보내기 (백업)
+    </button>
+    <button class="sbtn imp" id="btn-import">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 16 12 21 17 16"/><line x1="12" y1="21" x2="12" y2="9"/>
+      </svg>
+      가져오기 (복원)
+    </button>
+    <input type="file" id="file-input" accept=".json">
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- 추가/수정 모달 -->
+<div id="overlay">
+  <div id="sheet">
+    <div class="handle"></div>
+    <h2 id="sheet-title">식재료 추가</h2>
+    <div class="field">
+      <label>품명</label>
+      <input type="text" id="f-name" placeholder="예: 우유" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>수량</label>
+      <input type="text" id="f-qty" placeholder="예: 1개, 500g" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>보관위치</label>
+      <div class="seg">
+        <button class="seg-btn on" data-loc="냉장">❄️ 냉장</button>
+        <button class="seg-btn" data-loc="냉동">🧊 냉동</button>
+        <button class="seg-btn" data-loc="실온">☀️ 실온</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>유통기한</label>
+      <input type="date" id="f-date">
+      <div class="noexp">
+        <input type="checkbox" id="f-noexp">
+        <label for="f-noexp">유통기한 없음 (분말류 등)</label>
+      </div>
+    </div>
+    <div class="mact">
+      <button class="btn-cancel" id="btn-cancel">취소</button>
+      <button class="btn-save" id="btn-save">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 삭제 확인 -->
+<div id="cf">
+  <div class="cf-box">
+    <p id="cf-msg">삭제할까요?</p>
+    <div class="cf-acts">
+      <button class="cf-no" id="btn-cf-no">취소</button>
+      <button class="cf-yes" id="btn-cf-yes">삭제</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase SDK -->
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import {
+  getFirestore, collection, doc,
+  onSnapshot, addDoc, setDoc, deleteDoc
+} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+/* ── Firebase 초기화 ── */
+const firebaseConfig = {
+  apiKey: "AIzaSyA1bEoorlbABnRpIoLhWcdG8D-CDpznVyI",
+  authDomain: "fridge-manager-d5c6d.firebaseapp.com",
+  projectId: "fridge-manager-d5c6d",
+  storageBucket: "fridge-manager-d5c6d.firebasestorage.app",
+  messagingSenderId: "366755735182",
+  appId: "1:366755735182:web:1b06ef269aed6148e4cbdf"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+const COL = 'fridge_items';
+
+/* ── 상태 ── */
+const LOC_ORD = { '냉장': 0, '냉동': 1, '실온': 2 };
+const LOC_LBL = { '냉장': '❄️ 냉장', '냉동': '🧊 냉동', '실온': '☀️ 실온' };
+
+let items      = [];   // [{ _id, name, qty, loc, exp }]
+let curFilter  = 'all';
+let editId     = null; // Firestore document id
+let deleteId   = null;
+let toastTimer = null;
+
+/* ── 날짜 계산 ── */
+function todayMs() { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); }
+function calcDday(exp) {
+  if (!exp) return null;
+  const e = new Date(exp); e.setHours(0,0,0,0);
+  return Math.round((e.getTime() - todayMs()) / 86400000);
+}
+function ddayLabel(d) {
+  if (d === null) return '기한없음';
+  if (d < 0) return '만료 ' + Math.abs(d) + '일';
+  if (d === 0) return 'D-day';
+  return 'D-' + d;
+}
+function ddayCls(d) {
+  if (d === null) return 'd-none';
+  if (d < 0)     return 'd-over';
+  if (d <= 2)    return 'd-danger';
+  if (d <= 6)    return 'd-warn';
+  return 'd-ok';
+}
+function locCls(loc) { return loc === '냉장' ? 'b-cold' : loc === '냉동' ? 'b-freeze' : 'b-room'; }
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── 정렬 ── */
+function sorted(list) {
+  return list.slice().sort((a, b) => {
+    const lo = LOC_ORD[a.loc] - LOC_ORD[b.loc];
+    if (lo !== 0) return lo;
+    const da = calcDday(a.exp), db = calcDday(b.exp);
+    if (da === null && db === null) return 0;
+    if (da === null) return 1;
+    if (db === null) return -1;
+    return da - db;
+  });
+}
+
+/* ── 렌더링 ── */
+function render() {
+  const base = curFilter === 'all' ? items : items.filter(i => i.loc === curFilter);
+  const list = sorted(base);
+  const el   = document.getElementById('list');
+
+  if (!list.length) {
+    el.innerHTML = '<div class="empty">📭<br>등록된 식재료가 없어요<br><span style="font-size:13px;color:var(--text3)">상단 + 버튼으로 추가해보세요</span></div>';
+    renderStats(); return;
+  }
+
+  let html = '', prev = null;
+  list.forEach(it => {
+    if (curFilter === 'all' && it.loc !== prev) {
+      html += `<div class="grp-hdr">${LOC_LBL[it.loc] || it.loc}</div>`;
+      prev = it.loc;
+    }
+    const d = calcDday(it.exp);
+    html += `
+      <div class="card">
+        <div class="cl">
+          <div class="cname">${esc(it.name)}</div>
+          <div class="cmeta">
+            <span class="badge ${locCls(it.loc)}">${it.loc}</span>
+            <span class="qty">${esc(it.qty)}</span>
+          </div>
+        </div>
+        <div class="cr">
+          <span class="dday ${ddayCls(d)}">${ddayLabel(d)}</span>
+          <span class="edate">${it.exp ? it.exp.replace(/-/g,'.') : '—'}</span>
+        </div>
+        <div class="acts">
+          <button class="ibtn" data-edit="${esc(it._id)}" aria-label="수정">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+          </button>
+          <button class="ibtn del" data-del="${esc(it._id)}" data-name="${esc(it.name)}" aria-label="삭제">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+              <path d="M10 11v6M14 11v6"/>
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+            </svg>
+          </button>
+        </div>
+      </div>`;
+  });
+  el.innerHTML = html;
+  renderStats();
+}
+
+function renderStats() {
+  const t = items.length;
+  const w = items.filter(i => { const d = calcDday(i.exp); return d !== null && d >= 0 && d <= 3; }).length;
+  const o = items.filter(i => { const d = calcDday(i.exp); return d !== null && d < 0; }).length;
+  const n = items.filter(i => !i.exp).length;
+  document.getElementById('stats').innerHTML =
+    `<div class="stat"><div class="stat-lbl">전체</div><div class="stat-val">${t}</div></div>` +
+    `<div class="stat"><div class="stat-lbl">기한없음</div><div class="stat-val">${n}</div></div>` +
+    `<div class="stat"><div class="stat-lbl">임박 3일내</div><div class="stat-val c-warn">${w}</div></div>` +
+    `<div class="stat"><div class="stat-lbl">만료</div><div class="stat-val c-danger">${o}</div></div>`;
+}
+
+/* ── Firestore 실시간 리스너 ── */
+const syncEl = document.getElementById('sync-status');
+
+onSnapshot(collection(db, COL), (snapshot) => {
+  items = snapshot.docs.map(d => ({ _id: d.id, ...d.data() }));
+  render();
+  syncEl.textContent = '🟢 실시간 연결';
+  syncEl.className   = 'ok';
+}, (err) => {
+  console.error(err);
+  syncEl.textContent = '🔴 연결 오류';
+  syncEl.className   = 'err';
+  document.getElementById('list').innerHTML =
+    '<div class="empty">⚠️ 연결에 실패했어요<br><span style="font-size:12px">Firestore 보안 규칙을 확인해주세요</span></div>';
+});
+
+/* ── Firestore CRUD ── */
+async function addItem(data)    { await addDoc(collection(db, COL), data); }
+async function updateItem(id, data) { await setDoc(doc(db, COL, id), data); }
+async function removeItem(id)   { await deleteDoc(doc(db, COL, id)); }
+
+/* ── 필터 ── */
+document.getElementById('filters').addEventListener('click', e => {
+  const btn = e.target.closest('.fbtn');
+  if (!btn) return;
+  document.querySelectorAll('.fbtn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  curFilter = btn.dataset.f;
+  render();
+});
+
+/* ── 목록 클릭 위임 ── */
+document.getElementById('list').addEventListener('click', e => {
+  const editBtn = e.target.closest('[data-edit]');
+  const delBtn  = e.target.closest('[data-del]');
+  if (editBtn) openSheet(editBtn.dataset.edit);
+  if (delBtn)  openConfirm(delBtn.dataset.del, delBtn.dataset.name);
+});
+
+/* ── 모달 ── */
+function openSheet(id) {
+  editId = id || null;
+  const noexpChk = document.getElementById('f-noexp');
+  const dateInp  = document.getElementById('f-date');
+
+  if (editId) {
+    const it = items.find(i => i._id === editId);
+    if (!it) return;
+    document.getElementById('sheet-title').textContent = '식재료 수정';
+    document.getElementById('f-name').value = it.name;
+    document.getElementById('f-qty').value  = it.qty;
+    document.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('on', b.dataset.loc === it.loc));
+    const noExp = !it.exp;
+    noexpChk.checked = noExp; dateInp.disabled = noExp;
+    dateInp.value    = noExp ? '' : it.exp;
+  } else {
+    document.getElementById('sheet-title').textContent = '식재료 추가';
+    document.getElementById('f-name').value = '';
+    document.getElementById('f-qty').value  = '';
+    document.querySelectorAll('.seg-btn').forEach((b,i) => b.classList.toggle('on', i === 0));
+    noexpChk.checked = false; dateInp.disabled = false; dateInp.value = '';
+  }
+  document.getElementById('overlay').classList.add('on');
+  setTimeout(() => document.getElementById('f-name').focus(), 300);
+}
+
+function closeSheet() {
+  document.getElementById('overlay').classList.remove('on');
+  editId = null;
+}
+
+document.getElementById('btn-add').addEventListener('click', () => openSheet(null));
+document.getElementById('btn-cancel').addEventListener('click', closeSheet);
+document.getElementById('overlay').addEventListener('click', e => { if (e.target === document.getElementById('overlay')) closeSheet(); });
+
+document.getElementById('sheet').addEventListener('click', e => {
+  const sb = e.target.closest('.seg-btn');
+  if (!sb) return;
+  document.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('on'));
+  sb.classList.add('on');
+});
+
+document.getElementById('f-noexp').addEventListener('change', function () {
+  const inp = document.getElementById('f-date');
+  inp.disabled = this.checked;
+  if (this.checked) inp.value = '';
+});
+
+/* ── 저장 ── */
+document.getElementById('btn-save').addEventListener('click', async () => {
+  const name  = document.getElementById('f-name').value.trim();
+  const qty   = document.getElementById('f-qty').value.trim();
+  const selLoc = document.querySelector('.seg-btn.on');
+  const loc   = selLoc ? selLoc.dataset.loc : '냉장';
+  const noExp = document.getElementById('f-noexp').checked;
+  const exp   = noExp ? null : document.getElementById('f-date').value;
+
+  if (!name) { alert('품명을 입력해주세요.'); return; }
+  if (!noExp && !exp) { alert('유통기한을 입력하거나\n"유통기한 없음"을 체크해주세요.'); return; }
+
+  const data = { name, qty: qty || '1', loc, exp: exp || null };
+
+  try {
+    if (editId) {
+      await updateItem(editId, data);
+      showToast('✅ 수정했어요');
+    } else {
+      await addItem(data);
+      showToast('✅ 추가했어요');
+    }
+    closeSheet();
+  } catch (e) {
+    alert('저장 중 오류가 발생했어요.\n' + e.message);
+  }
+});
+
+/* ── 삭제 ── */
+function openConfirm(id, name) {
+  deleteId = id;
+  document.getElementById('cf-msg').textContent = `"${name}"을(를) 삭제할까요?`;
+  document.getElementById('cf').classList.add('on');
+}
+
+document.getElementById('btn-cf-no').addEventListener('click', () => {
+  document.getElementById('cf').classList.remove('on'); deleteId = null;
+});
+
+document.getElementById('btn-cf-yes').addEventListener('click', async () => {
+  if (deleteId) {
+    try {
+      await removeItem(deleteId);
+      showToast('🗑 삭제했어요');
+    } catch (e) { alert('삭제 오류: ' + e.message); }
+  }
+  document.getElementById('cf').classList.remove('on'); deleteId = null;
+});
+
+/* ── 내보내기 (백업) ── */
+document.getElementById('btn-export').addEventListener('click', () => {
+  const date = new Date().toISOString().slice(0,10);
+  const exportData = items.map(({ _id, ...rest }) => rest); // _id 제외
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+  const filename = `냉장고_${date}.json`;
+
+  if (window.navigator?.share && window.navigator?.canShare) {
+    try {
+      const file = new File([blob], filename, { type: 'application/json' });
+      if (window.navigator.canShare({ files: [file] })) {
+        window.navigator.share({ files: [file], title: '냉장고 백업 데이터' })
+          .catch(() => {});
+        return;
+      }
+    } catch(e) {}
+  }
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showToast('📤 백업 파일을 저장했어요');
+});
+
+/* ── 가져오기 (복원) ── */
+document.getElementById('btn-import').addEventListener('click', () => {
+  document.getElementById('file-input').click();
+});
+
+document.getElementById('file-input').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!Array.isArray(data)) throw new Error('invalid');
+      let count = 0;
+      for (const item of data) {
+        const { _id, ...rest } = item;
+        await addDoc(collection(db, COL), rest);
+        count++;
+      }
+      showToast(`✅ ${count}개 항목을 가져왔어요`);
+    } catch (err) {
+      alert('파일을 읽을 수 없어요.\n올바른 백업 파일인지 확인해주세요.');
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+});
+
+/* ── 토스트 ── */
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('on'), 3000);
+}
+
+</script>
+</body>
+</html>
